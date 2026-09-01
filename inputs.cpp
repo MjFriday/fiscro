@@ -16,7 +16,7 @@ int main()
         XTestFakeMotionEvent(display, whichScreen, x, y, 0);
         XTestFakeButtonEvent(display, 1, True, 0);
         XFlush(display);
-        usleep(50000);
+        usleep(50000);  
         XTestFakeButtonEvent(display, 1, False, 0);
         XFlush(display);
         usleep(50000);
