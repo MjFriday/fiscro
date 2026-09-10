@@ -161,35 +161,36 @@ int fishing_(int bar[3], uint32_t ctrl_bar_clr_L, uint32_t ctrl_bar_clr_R, uint3
                 }
             }
         XDestroyImage(check_bar);
-        int mid_of_ctrl_bar_pos= (ctrl_bar_pos[0]+ctrl_bar_pos[1])/2;
+        int mid_of_ctrl_bar_pos= (ctrl_bar_pos[0]+ctrl_bar_pos[1])/2, ctrl_bar_size=ctrl_bar_pos[1]-ctrl_bar_pos[0];
         double primary_time=(mid_of_ctrl_bar_pos - priority_zone)*4020;
-        double secondary_time=primary_time*0.15;
-        if(primary_time>0)
+        double secondary_time=primary_time*0.124;
+        
+        if(priority_zone<=(ctrl_bar_size*0.55))
         {
             XTestFakeButtonEvent(display, 1, 0, CurrentTime);
             XFlush(display); usleep(primary_time);
-            XTestFakeButtonEvent(display, 1, 1, CurrentTime);
-            XFlush(display); usleep(secondary_time);
-            XTestFakeButtonEvent(display, 1, 0, CurrentTime);
-            XFlush(display); usleep(primary_time);
-            XTestFakeButtonEvent(display, 1, 1, CurrentTime);
-            XFlush(display); usleep(secondary_time*1);
-
-
         }
-        if(primary_time<0)
+        else if(priority_zone>=(bar_width-(ctrl_bar_size*0.55)))
         {
             XTestFakeButtonEvent(display, 1, 1, CurrentTime);
-            XFlush(display); usleep(primary_time*-1);
-            XTestFakeButtonEvent(display, 1, 0, CurrentTime);
-            XFlush(display); usleep(secondary_time*-1);
-            XTestFakeButtonEvent(display, 1, 1, CurrentTime);
-            XFlush(display); usleep(primary_time*-1);
-            XTestFakeButtonEvent(display, 1, 0, CurrentTime);
-            XFlush(display); usleep(secondary_time*-1);
-
-
-
+            XFlush(display); usleep(primary_time);
+        }
+        else
+        {
+            if(primary_time>0)
+            {
+                XTestFakeButtonEvent(display, 1, 0, CurrentTime);
+                XFlush(display); usleep(primary_time);
+                XTestFakeButtonEvent(display, 1, 1, CurrentTime);
+                XFlush(display); usleep(secondary_time);
+            }
+            if(primary_time<0)
+            {
+                XTestFakeButtonEvent(display, 1, 1, CurrentTime);
+                XFlush(display); usleep(primary_time*-1);
+                XTestFakeButtonEvent(display, 1, 0, CurrentTime);
+                XFlush(display); usleep(secondary_time*-1);
+            }
         }
     }
     

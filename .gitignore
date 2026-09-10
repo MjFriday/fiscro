@@ -1,5 +1,8 @@
 # Compiled binaries & objects
 inputs
+colorDetect
+UI
+settings.data
 *.o
 *.out
 *.exe

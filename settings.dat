@@ -1,0 +1,22 @@
+screen_resolution: 1366,768
+
+# pixel location settings
+# upper left corner of the fishing mini game bar (X,Y)
+bar_start:407,642
+# bottom right corner of the fishing mini game bar (X,Y)
+bar_end:958,664
+# friend boost icon location. only 1 green pixel from it is needed
+friend_boost:30,718
+# you must have the rod in your hot bar and have a pixel location of the white outline around it
+rod_equip:373,700
+
+# pixel color settings (very self explanatory)
+ctrl_bar_clr_L:0xF1F1F1
+ctrl_bar_clr_R:0xF1F1F1
+arrow_clr_range:0x707070,0x919191
+fish_minigame_clr:0x434B5B
+friend_boost_clr:0x9BFF9B
+
+casting:1
+shaking:0
+fishing:1
