@@ -166,7 +166,7 @@ void rod_equiping(settings& s)
         XTestFakeKeyEvent(s.display, XKeysymToKeycode(s.display, XK_1), 1, CurrentTime);
         XFlush(s.display); usleep(10000);
         XTestFakeKeyEvent(s.display, XKeysymToKeycode(s.display, XK_1), 0, CurrentTime);
-        XFlush(s.display); usleep(200000);
+        XFlush(s.display); usleep(10000);
     }
     XDestroyImage(check);
 }
@@ -187,7 +187,7 @@ void cast_rod(settings& s)
         XTestFakeMotionEvent(s.display, -1, (s.screen_res[0] / 2), ((s.screen_res[1] / 2)), CurrentTime);
         XFlush(s.display); usleep(1000);
         XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
-        XFlush(s.display);
+        XFlush(s.display); usleep(800000);
     }
 }
 
