@@ -2,6 +2,7 @@
 #include <fstream>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
 #include <unistd.h>
@@ -112,10 +113,17 @@ bool frnd_icon_check(settings& s)
     return active;
 }
 
-int rod_equiping(settings& s)
+int rod_equiping(settings& s, bool equip_it=true)
 {
     XImage* check = XGetImage(s.display, s.root, s.rod_equip[0], s.rod_equip[1], 1, 1, AllPlanes, ZPixmap);
-    if(0xFFFFFF != ((uint32_t)XGetPixel(check, 0, 0) & 0xFFFFFF))
+    if(0xFFFFFF != ((uint32_t)XGetPixel(check, 0, 0) & 0xFFFFFF) && equip_it)
+    {
+        XTestFakeKeyEvent(s.display, XKeysymToKeycode(s.display, XK_1), 1, CurrentTime);
+        XFlush(s.display); usleep(10000);
+        XTestFakeKeyEvent(s.display, XKeysymToKeycode(s.display, XK_1), 0, CurrentTime);
+        XFlush(s.display); usleep(10000);
+    }
+    else
     {
         XTestFakeKeyEvent(s.display, XKeysymToKeycode(s.display, XK_1), 1, CurrentTime);
         XFlush(s.display);
@@ -133,7 +141,7 @@ int cast_(settings& s)
     {
         rod_equiping(s);
         XTestFakeMotionEvent(s.display, -1, (s.screen_res[0] / 2), (s.screen_res[1] / 2), CurrentTime);
-        XFlush(s.display); usleep(1000);
+        XFlush(s.display); usleep(100000);
         XTestFakeButtonEvent(s.display, 1, 1, CurrentTime);
         XFlush(s.display); usleep(200000);
         XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
@@ -160,78 +168,140 @@ int shake_(settings& s)
     }
 }
 
-int fishing_(settings& s)
-{
+int fishing_(settings& s){
     int mini_game_bar_[3] = {s.bar_start[0], s.bar_end[0], (s.bar_start[1] + s.bar_end[1]) / 2};
+    int bar_width = mini_game_bar_[1] - mini_game_bar_[0];
+
+    constexpr float Kp = 0.18f;
+    constexpr float Kd_base = 1.40f;
+    constexpr float max_velocity = 0.25f;
+    constexpr float base_brake_lead_hold = 155.0f;
+    constexpr float brake_lead_release = 75.0f;
+    constexpr float quad_brake_factor = 180.0f;
+    constexpr float alpha = 0.32f;
+    constexpr float max_kd_force = 12.0f;
+    constexpr int coast_zone = 12;
+    constexpr int deadband = 5;
+
+    float last_bar_pos = -1.0f;
+    float smoothed_velocity = 0.0f;
+    bool is_holding = false;
+
+    auto last_time = chrono::high_resolution_clock::now();
+
     while(1)
     {
         if(frnd_icon_check(s)) 
         {
+            usleep(100000);
+            rod_equiping(s, false);
             return 0;
         }
-        
-        int bar_width = mini_game_bar_[1] - mini_game_bar_[0];
         XImage* check_bar = XGetImage(s.display, s.root, mini_game_bar_[0], mini_game_bar_[2], bar_width, 1, AllPlanes, ZPixmap);
-        
         int ctrl_bar_pos[2] = {0, bar_width - 1};
         int priority_zone = bar_width / 2;
 
         for(int i = 0; i < bar_width - 1; i++)
         {
-            if(s.ctrl_bar_clr_L == ((uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF) || s.arrow_clr == ((uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF))
+            uint32_t clr = (uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF;
+            if(s.ctrl_bar_clr_L == clr || s.arrow_clr == clr)
             {
                 ctrl_bar_pos[0] = i; break;
             }
-        } usleep(1000);
+        }
         for(int i = bar_width - 1; i >= 0; i--)
         {
-            if(s.ctrl_bar_clr_R == ((uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF) || s.arrow_clr == ((uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF))
+            uint32_t clr = (uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF;
+            if(s.ctrl_bar_clr_R == clr || s.arrow_clr == clr)
             {
                 ctrl_bar_pos[1] = i; break;
             }
-        } usleep(1000);
+        }
         for(int i = 0; i < bar_width - 1; i++)
         {
-            if(s.fish_minigame_clr == ((uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF))
+            uint32_t clr = (uint32_t)XGetPixel(check_bar, i, 0) & 0xFFFFFF;
+            if(s.fish_minigame_clr == clr)
             {
                 priority_zone = i; break;
             }
         }
         XDestroyImage(check_bar);
 
-        int mid_of_ctrl_bar_pos = (ctrl_bar_pos[0] + ctrl_bar_pos[1]) / 2;
-        int ctrl_bar_size = ctrl_bar_pos[1] - ctrl_bar_pos[0];
-        double how_far = abs(mid_of_ctrl_bar_pos - priority_zone);
-        if(how_far < 0) how_far *= -1;
-        double primary_time = 25000 * std::sqrt(how_far)+1000;
-        double secondary_time = 6000 * std::sqrt(how_far)+600;
-        if(priority_zone <= (ctrl_bar_size * 0.6))
+        auto current_time = chrono::high_resolution_clock::now();
+        float dt = chrono::duration<float, milli>(current_time - last_time).count();
+        last_time = current_time;
+
+        float current_bar_pos = (ctrl_bar_pos[0] + ctrl_bar_pos[1]) / 2.0f;
+
+        if(last_bar_pos >= 0.0f && dt > 0.0f)
         {
-            XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
-            XFlush(s.display); usleep(primary_time);
+            float raw_velocity = (current_bar_pos - last_bar_pos) / dt;
+            smoothed_velocity = (alpha * raw_velocity) + ((1.0f - alpha) * smoothed_velocity);
         }
-        else if(priority_zone >= (bar_width - (ctrl_bar_size * 0.6)))
+        last_bar_pos = current_bar_pos;
+
+        float active_lead = is_holding ? base_brake_lead_hold : brake_lead_release;
+        float quad_lead_offset = (smoothed_velocity > 0.0f) ? (smoothed_velocity * smoothed_velocity * quad_brake_factor) : 0.0f;
+        
+        float predicted_bar_pos = current_bar_pos + (smoothed_velocity * active_lead) + quad_lead_offset;
+        
+        float raw_distance = (float)priority_zone - current_bar_pos;
+        float raw_predicted_error = (float)priority_zone - predicted_bar_pos;
+        
+        float smooth_predicted_error = tanhf(raw_predicted_error / 22.0f) * 20.0f;
+
+        float dynamic_Kd = Kd_base + (fabsf(smoothed_velocity) * 1.5f);
+        float dampening_force = clamp(dynamic_Kd * smoothed_velocity * 10.0f, -max_kd_force, max_kd_force);
+
+        float control_output = (Kp * smooth_predicted_error) - dampening_force;
+
+        if(smoothed_velocity > max_velocity)
         {
-            XTestFakeButtonEvent(s.display, 1, 1, CurrentTime);
-            XFlush(s.display); usleep(primary_time); 
+            if(is_holding)
+            {
+                XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
+                XFlush(s.display);
+                is_holding = false;
+            }
+        } 
+        else if(raw_distance > 0.0f && raw_distance < coast_zone && smoothed_velocity > 0.08f)
+        {
+            if(is_holding)
+            {
+                XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
+                XFlush(s.display);
+                is_holding = false;
+            }
         }
+        else if(abs(raw_distance) < deadband && smoothed_velocity > 0.0f)
+        {
+            if(is_holding)
+            {
+                XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
+                XFlush(s.display);
+                is_holding = false;
+            }
+        } 
+        else if(control_output > 0.0f)
+        {
+            if(!is_holding)
+            {
+                XTestFakeButtonEvent(s.display, 1, 1, CurrentTime);
+                XFlush(s.display);
+                is_holding = true;
+            }
+        } 
         else
         {
-            if(priority_zone <= mid_of_ctrl_bar_pos)
+            if(is_holding)
             {
                 XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
-                XFlush(s.display); usleep(primary_time);
-                XTestFakeButtonEvent(s.display, 1, 1, CurrentTime);
-                XFlush(s.display); usleep(secondary_time);
-            }
-            if(priority_zone > mid_of_ctrl_bar_pos)
-            {
-                XTestFakeButtonEvent(s.display, 1, 1, CurrentTime);
-                XFlush(s.display); usleep(primary_time);
-                XTestFakeButtonEvent(s.display, 1, 0, CurrentTime);
-                XFlush(s.display); usleep(secondary_time);
+                XFlush(s.display);
+                is_holding = false;
             }
         }
+
+        usleep(6000);
     }
 }
 
@@ -243,6 +313,7 @@ int main()
         if(s.casting) cast_(s);
         if(s.shaking) shake_(s);
         if(s.fishing) {sleep(1);fishing_(s);}
+        usleep(600000);
     }
     return 0;
 }
