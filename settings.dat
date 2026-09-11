@@ -9,6 +9,9 @@ bar_end:958,664
 friend_boost:28,718
 # you must have the rod in your hot bar and have a pixel location of the white outline around it
 rod_equip:387,765
+reconnect_button:700,460
+teleport_button:750,430
+roblox_logo:32,32
 
 # pixel color settings (very self explanatory)
 ctrl_bar_clr_L:0xF1F1F1
@@ -16,7 +19,9 @@ ctrl_bar_clr_R:0xF1F1F1
 arrow_clr:0x868686
 fish_minigame_clr:0x434B5B
 friend_boost_clr:0x9BFF9B
+roblox_logo_clr:0xF7F7F8
 
 casting:1
 shaking:0
 fishing:1
+auto_reconnect:1
